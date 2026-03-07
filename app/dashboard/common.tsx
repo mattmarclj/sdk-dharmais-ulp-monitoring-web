@@ -2,10 +2,13 @@ import type React from "react";
 import { Download, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
+import { UlpData } from "./data-loader";
+
 export type Tone = "positive" | "negative" | "warning" | "neutral";
 
 export type CommonViewProps = {
   isLoading: boolean;
+  data: UlpData[];
 };
 
 type KpiStatProps = {
@@ -13,9 +16,10 @@ type KpiStatProps = {
   value: string;
   helper?: string;
   tone?: Tone;
+  icon?: React.ElementType;
 };
 
-export function KpiStat({ label, value, helper, tone = "neutral" }: KpiStatProps) {
+export function KpiStat({ label, value, helper, tone = "neutral", icon: Icon }: KpiStatProps) {
   const color =
     tone === "positive"
       ? "text-emerald-600"
@@ -27,9 +31,12 @@ export function KpiStat({ label, value, helper, tone = "neutral" }: KpiStatProps
 
   return (
     <div className="space-y-1">
-      <p className="text-[11px] font-medium uppercase tracking-wide text-[#5B6B7F]">
-        {label}
-      </p>
+      <div className="flex items-center gap-2">
+        {Icon && <Icon className={`h-4 w-4 ${color}`} />}
+        <p className="text-[11px] font-medium uppercase tracking-wide text-[#5B6B7F]">
+          {label}
+        </p>
+      </div>
       <p className="text-base font-semibold text-[#0B1E33] lg:text-lg">
         {value}
       </p>

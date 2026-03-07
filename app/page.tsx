@@ -16,11 +16,13 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { OverviewView } from "./dashboard/overview-view";
-import { PolisView } from "./dashboard/polis-view";
-import { PremiView } from "./dashboard/premi-view";
-import { KlaimView } from "./dashboard/klaim-view";
+import { PaketView } from "./dashboard/paket-view";
+import { AnggaranView } from "./dashboard/anggaran-view";
+import { ProgresView } from "./dashboard/progres-view";
+import { MasterDataView } from "./dashboard/master-data-view";
+import { loadUlpData, UlpData } from "./dashboard/data-loader";
 
-type DashboardView = "overview" | "polis" | "premi" | "klaim";
+type DashboardView = "overview" | "paket" | "anggaran" | "progres" | "master";
 
 type PeriodPreset = "today" | "7d" | "30d" | "custom";
 
@@ -30,12 +32,13 @@ type PeriodState = {
   to: string;
 };
 
-const orderedViews: DashboardView[] = ["overview", "polis", "premi", "klaim"];
+const orderedViews: DashboardView[] = ["overview", "paket", "anggaran", "progres"];
 
 export default function Home() {
   const [activeView, setActiveView] = useState<DashboardView>("overview");
   const [autoRotate, setAutoRotate] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
+  const [ulpData, setUlpData] = useState<UlpData[]>([]);
   const [period, setPeriod] = useState<PeriodState>(() => {
     const today = new Date();
     const iso = today.toISOString().slice(0, 10);
@@ -51,6 +54,44 @@ export default function Home() {
 
   useEffect(() => {
     const timeout = setTimeout(() => setIsLoading(false), 800);
+    loadUlpData().then((data) => {
+      setUlpData(data);
+      
+      // Auto-adjust period if data exists and is old
+      if (data.length > 0) {
+        // Find latest date
+        const dates = data
+          .map(d => d.tanggalDpp?.getTime() || 0)
+          .filter(t => t > 0);
+        
+        if (dates.length > 0) {
+          const maxDate = new Date(Math.max(...dates));
+          const today = new Date();
+          const diffTime = Math.abs(today.getTime() - maxDate.getTime());
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+          
+          // If latest data is older than 7 days, adjust view to show last 30 days of data
+          if (diffDays > 7) {
+             // Adjust to local time string for input[type="date"]
+             // Note: toISOString() is UTC, so we need to be careful. 
+             // Ideally we use a library like date-fns, but here we can manually format.
+             const formatDate = (d: Date) => {
+                const year = d.getFullYear();
+                const month = String(d.getMonth() + 1).padStart(2, '0');
+                const day = String(d.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+             };
+
+             const toIso = formatDate(maxDate);
+             const fromDate = new Date(maxDate);
+             fromDate.setDate(fromDate.getDate() - 30);
+             const fromIso = formatDate(fromDate);
+             
+             setPeriod({ preset: "custom", from: fromIso, to: toIso });
+          }
+        }
+      }
+    });
     return () => clearTimeout(timeout);
   }, []);
 
@@ -68,11 +109,32 @@ export default function Home() {
       .catch(() => {});
   }, []);
 
+  const filteredData = useMemo(() => {
+    if (!ulpData.length) return [];
+
+    const { from, to } = period;
+    const [fromY, fromM, fromD] = from.split("-").map(Number);
+    const [toY, toM, toD] = to.split("-").map(Number);
+    
+    // Create dates at start/end of day in local time
+    const fromDate = new Date(fromY, fromM - 1, fromD, 0, 0, 0, 0);
+    const toDate = new Date(toY, toM - 1, toD, 23, 59, 59, 999);
+
+    return ulpData.filter((item) => {
+      // Primary date: Tanggal DPP, Fallback: Tanggal Diterima DPP
+      const date = item.tanggalDpp || item.tanggalDiterimaDpp;
+      if (!date) return false;
+      
+      return date >= fromDate && date <= toDate;
+    });
+  }, [ulpData, period]);
+
   const viewLabel = useMemo(() => {
-    if (activeView === "overview") return "Ringkasan Portofolio";
-    if (activeView === "polis") return "Monitoring Polis Aktif";
-    if (activeView === "premi") return "Monitoring Premi Asuransi";
-    return "Monitoring Klaim Asuransi";
+    if (activeView === "overview") return "Ringkasan Eksekutif";
+    if (activeView === "paket") return "Daftar Paket Pengadaan";
+    if (activeView === "anggaran") return "Analisis Anggaran & HPS";
+    if (activeView === "progres") return "Status & Progres Pengadaan";
+    return "Master Data";
   }, [activeView]);
 
   const handleSetPreset = (preset: PeriodPreset) => {
@@ -121,17 +183,17 @@ export default function Home() {
           </div>
           <div>
             <p className="text-xs font-medium uppercase tracking-wide text-[#5B6B7F]">
-              SIP H2H
+              RS KANKER DHARMAIS
             </p>
             <p className="text-sm font-semibold">
-              Dashboard Monitoring Kredit Konsumtif
+              Dashboard Monitoring ULP
             </p>
           </div>
         </div>
         <div className="hidden items-center gap-3 text-xs text-[#5B6B7F] sm:flex">
           <Badge variant="soft" className="gap-1">
             <ShieldCheck className="h-3 w-3 text-emerald-600" />
-            Portofolio Tercover Asuransi
+            Pengadaan Barang & Jasa
           </Badge>
           <div className="flex items-center gap-1">
             <CalendarClock className="h-3.5 w-3.5" />
@@ -152,7 +214,7 @@ export default function Home() {
                 <span>Monitoring</span>
                 <span className="h-4 w-px bg-[#C9D7E8]" />
                 <span className="font-medium text-[#0B1E33]">
-                  Kredit Konsumtif Tercover Asuransi
+                  Unit Layanan Pengadaan
                 </span>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -161,16 +223,17 @@ export default function Home() {
                 </h1>
                 <Badge className="gap-1 rounded-full bg-[#0066CC] px-2 py-0.5 text-[11px]">
                   <Users className="h-3 w-3" />
-                  Retail & Payroll Segment
+                  Semua Unit Kerja
                 </Badge>
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2 lg:gap-3">
               <TabsList>
-                <TabsTrigger value="overview">Overview</TabsTrigger>
-                <TabsTrigger value="polis">Polis</TabsTrigger>
-                <TabsTrigger value="premi">Premi</TabsTrigger>
-                <TabsTrigger value="klaim">Klaim</TabsTrigger>
+                <TabsTrigger value="overview">Ringkasan</TabsTrigger>
+                <TabsTrigger value="paket">Daftar Paket</TabsTrigger>
+                <TabsTrigger value="anggaran">Anggaran</TabsTrigger>
+                <TabsTrigger value="progres">Progres</TabsTrigger>
+                <TabsTrigger value="master">Master Data</TabsTrigger>
               </TabsList>
               <div className="flex flex-1 flex-col gap-1 rounded-2xl border border-[#C9E3FF] bg-white px-3 py-1.5 text-xs sm:flex-row sm:items-center">
                 <div className="flex items-center gap-2">
@@ -262,25 +325,31 @@ export default function Home() {
             value="overview"
             className="flex-1 overflow-y-auto lg:overflow-hidden"
           >
-            <OverviewView isLoading={isLoading} />
+            <OverviewView isLoading={isLoading} data={filteredData} />
           </TabsContent>
           <TabsContent
-            value="polis"
+            value="paket"
             className="flex-1 overflow-y-auto lg:overflow-hidden"
           >
-            <PolisView isLoading={isLoading} />
+            <PaketView isLoading={isLoading} data={filteredData} />
           </TabsContent>
           <TabsContent
-            value="premi"
+            value="anggaran"
             className="flex-1 overflow-y-auto lg:overflow-hidden"
           >
-            <PremiView isLoading={isLoading} />
+            <AnggaranView isLoading={isLoading} data={filteredData} />
           </TabsContent>
           <TabsContent
-            value="klaim"
+            value="progres"
             className="flex-1 overflow-y-auto lg:overflow-hidden"
           >
-            <KlaimView isLoading={isLoading} />
+            <ProgresView isLoading={isLoading} data={filteredData} />
+          </TabsContent>
+          <TabsContent
+            value="master"
+            className="flex-1 overflow-y-auto lg:overflow-hidden"
+          >
+            <MasterDataView isLoading={isLoading} data={ulpData} />
           </TabsContent>
         </Tabs>
       </div>
@@ -297,11 +366,13 @@ type UseAutoRotateArgs = {
 function useAutoRotate({ enabled, activeView, onChange }: UseAutoRotateArgs) {
   useEffect(() => {
     if (!enabled) return;
+
     const interval = setInterval(() => {
       const currentIndex = orderedViews.indexOf(activeView);
       const nextIndex = (currentIndex + 1) % orderedViews.length;
       onChange(orderedViews[nextIndex]);
-    }, 15000);
+    }, 15000); // 15 seconds
+
     return () => clearInterval(interval);
   }, [enabled, activeView, onChange]);
 }
@@ -310,14 +381,12 @@ function useIsDesktop() {
   const [isDesktop, setIsDesktop] = useState(false);
 
   useEffect(() => {
-    const update = () => {
-      if (typeof window !== "undefined") {
-        setIsDesktop(window.innerWidth >= 1280);
-      }
-    };
-    update();
-    window.addEventListener("resize", update);
-    return () => window.removeEventListener("resize", update);
+    if (typeof window === "undefined") return;
+
+    const check = () => setIsDesktop(window.innerWidth >= 1024);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
   }, []);
 
   return isDesktop;
