@@ -1,4 +1,4 @@
-const CACHE_NAME = "sip-h2h-cache-v1";
+const CACHE_NAME = "ulp-monitoring-cache-v1";
 
 const OFFLINE_URLS = ["/", "/favicon.ico"];
 
